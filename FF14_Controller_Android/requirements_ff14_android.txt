@@ -1,0 +1,10 @@
+# Dependencias para FF14 Controller Android App
+kivy==2.1.0
+kivymd==1.1.1
+python-for-android==2023.3.11
+buildozer==1.5.0
+
+# Para el servidor PC
+keyboard==0.13.5
+mouse==0.7.1
+pynput==1.7.6
