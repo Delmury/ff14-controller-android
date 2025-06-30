@@ -56,7 +56,13 @@ jobs:
 
     - name: Accept Android SDK licenses
       run: |
-        yes | buildozer android debug || true
+        mkdir -p ~/.android
+        echo 'count=0' > ~/.android/repositories.cfg
+        echo y | buildozer android debug || echo "First run to setup SDK"
+        
+    - name: Accept all SDK licenses
+      run: |
+        find ~/.buildozer -name "sdkmanager" 2>/dev/null | head -1 | xargs -I {} bash -c 'yes | {} --licenses' || true
         
     - name: Build with Buildozer
       run: |
