@@ -1,0 +1,122 @@
+name: Build FF14 Controller APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.buildozer
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('requirements_ff14_android.txt') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          git \
+          python3-dev \
+          python3-pip \
+          python3-venv \
+          zip \
+          unzip \
+          openjdk-8-jdk \
+          autoconf \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtinfo5 \
+          cmake \
+          libffi-dev \
+          libssl-dev \
+          ccache
+
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '8'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install buildozer cython
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+      with:
+        api-level: 31
+        build-tools: 30.0.3
+        ndk-version: 25.1.8937393
+
+    - name: Build with Buildozer
+      run: |
+        export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT
+        export ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT
+        export PATH=$PATH:$ANDROID_SDK_ROOT/tools:$ANDROID_SDK_ROOT/platform-tools
+        buildozer android debug
+
+    - name: Sign APK (optional)
+      run: |
+        # Crear keystore temporal para firma
+        keytool -genkey -v -keystore ff14controller.keystore -alias ff14key -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=FF14Controller,OU=Game,O=Controller,L=City,S=State,C=US"
+        
+        # Firmar APK
+        $ANDROID_SDK_ROOT/build-tools/30.0.3/apksigner sign --ks ff14controller.keystore --ks-key-alias ff14key --ks-pass pass:android --key-pass pass:android bin/ff14controller-1.0-debug.apk
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: FF14Controller-APK
+        path: bin/*.apk
+        retention-days: 30
+
+    - name: Create Release
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: FF14 Controller v1.0.${{ github.run_number }}
+        body: |
+          ## FF14 Controller para Android
+          
+          ### Instalación:
+          1. Descarga el archivo APK
+          2. Activa "Orígenes desconocidos" en tu tableta Android
+          3. Instala el APK
+          4. Ejecuta el servidor en tu PC
+          5. ¡Disfruta jugando FF14!
+          
+          ### Controles incluidos:
+          - Números 1-9, 0, -, =
+          - Teclas F1-F12
+          - Controles PS5 mapeados
+          - Macros especiales para FF14
+          
+          ### Changelog:
+          - Versión inicial con todas las funcionalidades
+        files: bin/*.apk
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
