@@ -52,24 +52,8 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install buildozer cython
-
-    - name: Patch PyJNIus for Python 3.8+ compatibility
-      run: |
-        mkdir -p patches
-        cat > patches/pyjnius_fix_long.patch << 'PATCH_EOF'
-        --- a/jnius/jnius_utils.pxi
-        +++ b/jnius/jnius_utils.pxi
-        @@ -320,7 +320,7 @@
-                     continue
-         
-                 if r == 'S' or r == 'I':
-        -            if isinstance(arg, int) or (isinstance(arg, long) and arg < 2147483648):
-        +            if isinstance(arg, int) and arg < 2147483648:
-                         score += 10
-                         continue
-        PATCH_EOF
-        echo "PyJNIus patch created successfully"
+        pip install buildozer cython==0.29.33
+        pip install --upgrade setuptools wheel
 
     - name: Accept Android SDK licenses
       run: |
@@ -81,37 +65,19 @@ jobs:
       run: |
         find ~/.buildozer -name "sdkmanager" 2>/dev/null | head -1 | xargs -I {} bash -c 'yes | {} --licenses' || true
         
-    - name: Build with Buildozer (with PyJNIus patch)
+    - name: Clean previous builds
       run: |
-        #!/bin/bash
-        set -e
+        rm -rf .buildozer/
+        rm -rf bin/
         
-        echo "Starting Buildozer build..."
-        buildozer android debug || {
-          echo "First build failed, applying PyJNIus patch..."
-          
-          # Find PyJNIus source directory
-          PYJNIUS_DIR=$(find ~/.buildozer -path "*/pyjnius-*" -name "jnius" -type d 2>/dev/null | head -1)
-          if [ -n "$PYJNIUS_DIR" ]; then
-            echo "Found PyJNIus at: $PYJNIUS_DIR"
-            
-            # Apply patch if the problematic line exists
-            if grep -q "isinstance(arg, long)" "$PYJNIUS_DIR/jnius_utils.pxi" 2>/dev/null; then
-              echo "Applying PyJNIus patch..."
-              sed -i 's/isinstance(arg, int) or (isinstance(arg, long) and arg < 2147483648)/isinstance(arg, int) and arg < 2147483648/g' "$PYJNIUS_DIR/jnius_utils.pxi"
-              echo "Patch applied successfully"
-            else
-              echo "PyJNIus patch not needed or already applied"
-            fi
-            
-            # Retry build
-            echo "Retrying build after patch..."
-            buildozer android debug
-          else
-            echo "PyJNIus directory not found, re-running build..."
-            buildozer android debug
-          fi
-        }
+    - name: Initialize Buildozer
+      run: |
+        buildozer init || echo "buildozer.spec already exists"
+        
+    - name: Build Android APK
+      run: |
+        echo "Building Android APK with stable PyJNIus 1.6.1..."
+        buildozer android debug
 
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
